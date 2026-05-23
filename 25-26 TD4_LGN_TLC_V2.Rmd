@@ -1,0 +1,762 @@
+---
+title: " Séance Visualisation  LGN et TLC. Module Statistique avec R - L3 Mathématiques
+  - DLL Mathématiques Economie"
+author: "Marie-Luce Taupin"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2  # Depth of headers to include in the TOC
+    number_sections: true  # Optional: to number the sections
+header-includes:
+   - \usepackage{tikz,lipsum,lmodern}
+   - \usepackage[most]{tcolorbox}
+   - \usepackage{t1enc}
+   - \usepackage[T1]{fontenc}
+   - \usepackage[utf8]{inputenc}
+   - \usepackage{color}
+   - \usepackage{tcolorbox}
+   - \usepackage{titlesec}
+   - \usepackage{xcolor}
+   - \usepackage{graphicx}
+   - \newcommand\ind{{ {{1}}\hspace{-0,8mm}{\mathrm I}}}  
+   - \def\cvl{\xrightarrow [n \to \infty] {\mathcal{L}}}
+   - \def\cvHps{\xrightarrow [n_1,n_2 \to \infty] {H_0,p.s.}}
+   - \def\cvH1ps{\xrightarrow [n_1,n_2 \to \infty] {H_1,p.s.}}
+   - \def\cvlH1n1{\xrightarrow [n_1,n_2 \to \infty] {\mathcal L, H_1,}}
+   - \def\cvlH0n{\xrightarrow [n_1,n_2 \to \infty] {\mathcal L, H_0}}
+   -  \def\cvlH0{\xrightarrow [n \to \infty] {\mathcal L, H_0}}
+   - \def\cvp{\xrightarrow [n \to \infty] {\mathbb P}}
+   - \def\cvps{\xrightarrow [n \to \infty] {p.s.}}
+   - \def\cvmq{\xrightarrow [n \to \infty] {\mathbb L^2}}
+   - \def\cvlp{\xrightarrow [n \to \infty] {\mathbb L^p}}
+   - \def\cvlq{\xrightarrow [n \to \infty] {\mathbb L^q}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+$$\ind_{x\geq 1}.$$
+
+$$Z_n\cvl \mathcal{N}(0,1).$$
+L'objectif de ce T.P. est de visualiser (à l'aide de \texttt{R}) la Loi des Grands Nombres et le Theorème Central Limite pour des variables issues de $n$ tirages indépendants 
+selon les trois distributions suivantes:
+
+*  la loi de Bernoulli ${\mathcal B}(p)$, $p \in [0,1]$, qui affecte
+aux points 0 et 1 les probabilités 
+$p_0=1-p$ et $p_1=p$. 
+*  la loi exponentielle de paramètre $\lambda>0$, dont la densité est donnée par: 
+$$
+  f_\lambda(x)= \lambda \exp (- \lambda x)\ind_{x\geq 0}=
+\begin{cases}
+\lambda \exp (- \lambda x)  \,  \text{ si } x>0,\\
+0 \quad \quad \quad \quad  \text{ sinon.} 
+\end{cases}
+$$
+* La loi de Cauchy, dont la densité est donnée par
+$$
+  f(x) = \frac{1}{\pi (1 + x^2)} \ind_{x\in \mathbb{R}}\, .
+$$
+
+
+\underline{Enoncé de la Loi faible des grands nombres (L.G.N.):}
+
+Soient $X_1,\cdots,X_n$, $n$ variables aléatoires indépendantes et identiquement distribuées (i.i.d.) telles que $\mathbb{E}(| X_1|)$ est finie. Si on note $\mu=\mathbb{E}(X_1)$ et $\overline{X}=(X_1+\cdots+X_n)/n$, alors
+$$\overline{X} \cvp \mu.$$
+
+\underline{Enoncé du théorème central limite (T.L.C.):}
+
+Soient $X_1,\cdots,X_n$, $n$ variables aléatoires indépendantes et identiquement distribuées (i.i.d.) telles que $\mathbb{E}(X_1^2)$ est finie. Si on note $\mu=\mathbb{E}(X_1)$, $\sigma^2=\mbox{Var}(X_1)$ et $\overline{X}=(X_1+\cdots+X_n)/n$, alors
+
+$$\frac{\sqrt{n}(\overline{X}-\mu)}{\sigma} \cvl
+ \mathcal{N}(0,1).$$
+
+
+On utilisera pour cela les fonctions de R qui sont rappelées dans le script qui vous est fourni.
+(voir `help' pour les détails de ces fonctions).
+
+\medskip
+
+Dans  un premier temps, on cherchera à représenter 
+la distribution des observations $x_1, x_2, \ldots, x_n$
+obtenues à partir de ces $n$ tirages. Chaque représentation graphique devra être commentée. 
+
+\medskip 
+
+Dans un second temps, on tracera le graphe de 
+$$
+\overline{x_k} = \frac 1 k \sum_{i=1}^k x_i 
+$$
+en fonction de $k \in \{1, \ldots, n\}$. On répétera l'opération plusieurs fois 
+pour chaque distribution, et on commentera. 
+
+\medskip
+
+Ensuite,  pour les trois distributions, on s'intéressera à la distribution de 
+$$
+\overline{x_n} = \frac 1 n \sum_{i=1}^n x_i 
+$$
+et pour les deux distributions continues, à la loi
+de 
+$$
+\text{Med}_n = \text{médiane}(x_1, \ldots, x_n) \, .
+$$
+Pour cela, on effectuera $N$ tirages indépendants
+de $\overline{x_n}$ et $\text{Med}_n$. \`A partir des 
+observations issues de ces $N$ tirages, on tracera
+les bo\^{\i}tes à moustache  de 
+$$\bar x_{n,1}, \bar x_{n,2}, \ldots, \bar x_{n, N}  \quad 
+\text{puis de} \quad
+ \text{med}_{n,1}, \text{med}_{n,2}, \ldots,  
+\text{med}_{n, N}$$
+en faisant varier $n$. On commentera.
+
+Pour les deux premières distributions, on étudiera
+selon le m\`eme procédé, la distribution de 
+$$
+  \sqrt{n}(\overline{x_n} -{\mathbb E}(X_1))/\sigma \, .
+$$
+
+Pour les deux dernières distributions, on étudiera selon 
+le même procédé, la distribution de 
+
+$$
+  \sqrt{n}(\text{Med}_n -\text{Med}(X_1)) \, .
+$$
+
+
+
+
+
+
+
+
+# Variables Bernoulli
+
+
+```{r}
+n<- 5000
+p<- 0.25
+set.seed(123)
+x<- rbinom(n=n, size=1, prob=p) # 1=> un échantillon de taille n de loi Bernoulli (p), Binomale 1,p=Bernoulli(p)
+head(x)
+mean(x)
+# Diagramme en bâtons avec ggplot
+library(scales)
+library(ggplot2)
+data=data.frame(x)
+ggplot(data, aes(x = as.factor(x))) +
+  geom_bar(fill = "steelblue", aes(y = (after_stat(count))/sum(after_stat(count)))) +  theme_bw()+
+  geom_text(aes(y = ((after_stat(count))/sum(after_stat(count))), label = scales::percent((after_stat(count))/sum(after_stat(count)))), stat = "count", vjust = -0.25) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Répartition des 0 et des 1 pour l'échantillon de Bernoulli(p)", y = "Pourcentage", x = "0 vs 1")+ 
+  theme(plot.title = element_text(color="red", size=8, face="bold.italic"))+
+ scale_y_continuous(limit = c(0, 0.85))
+```
+
+
+
+## Trajectoire de la moyenne empirique de Bernoulli
+```{r}
+somme_cum<-cumsum(x)
+k<- 1:n
+y=somme_cum/k
+max(y) # doit être plus petit que 1
+data=data.frame(k,y)
+data_b=data.frame(k,p)
+ggplot(data=data,aes(x=k,y=y))+
+  geom_line(color="blue")+
+  geom_line(data=data_b,aes(x=k,y=p),color="red")+
+  labs(x = "k", y = "xbar_k") +
+  ggtitle("Trajectoire de  la moyenne empirique en fonction de k")
+```
+
+## N réalisations indépendantes de la moyenne empirique
+```{r}
+#avec boucle
+NmeanBernoulli=function(N, n, proba)
+{
+  M <- vector(mode = "numeric", length = N)
+  for(i in 1:N)
+  {
+    M[i]<- mean(rbinom(n,size=1,prob=proba))
+  }
+  V<- M
+}
+#Sans boucle
+NmeanBernoulli <- function(N, n, proba)
+{
+  M <- rowMeans(matrix(rbinom(N * n, size = 1, prob = proba),
+                       nrow = N))
+  return(M)
+}
+```
+
+## Distribution de la moyenne empirique 
+```{r}
+Xbar100<- NmeanBernoulli(N=1000,n=100, proba=p)
+Xbar1000<- NmeanBernoulli(N=1000,n=1000, proba=p)
+Xbar10000<- NmeanBernoulli(N=1000,n=10000, proba=p)
+```
+
+
+### boxplot sans ggplot 
+
+```{r}
+boxplot(Xbar100,Xbar1000,Xbar10000, col="yellow", 
+     main="Boxplot des 1000 réalisations 
+de  la moyenne empirique, pour n=100, 1000 et 10000")
+abline(p,0, col="red")
+```
+
+### boxplot avec ggplot 
+```{r}
+library(ggplot2)
+df <- data.frame(
+  Xbar = c(Xbar100, Xbar1000, Xbar10000),
+  n = factor(rep(c("100", "1000", "10000"),
+                 times = c(length(Xbar100),
+                           length(Xbar1000),
+                           length(Xbar10000))))
+)
+ggplot(df, aes(x = n, y = Xbar)) +
+  geom_boxplot(fill = "yellow") +
+  geom_hline(yintercept = p, color = "red") +
+  labs(
+    title = "Boxplot des moyennes empiriques, pour n=100, 1000 et 10000",
+    x = "n",
+    y = "moyennes empiriques"
+  ) +
+  theme_minimal()
+```
+
+
+## Distribution de la moyenne empirique centrée et normalisée 
+
+```{r}
+Z100<- ((Xbar100-p) * sqrt(100))/sqrt((p*(1-p)))
+Z1000<- ((Xbar1000-p) * sqrt(1000))/sqrt((p*(1-p)))
+Z10000<- ((Xbar10000-p) * sqrt(10000))/sqrt((p*(1-p)))
+```
+
+### Sans ggplot
+
+```{r}
+boxplot(Z100,Z1000,Z10000, col="yellow", 
+        main="Boxplot des 1000 réalisations de  la moyenne 
+empirique centrée et normalisée, pour  n=100, 1000 et 10000")
+abline(0,0, col="red")
+```
+
+### avec ggplot 
+ 
+```{r}
+library(ggplot2)
+df <- data.frame(
+  Zn = c(Z100, Z1000, Z10000),
+  n = factor(rep(c("100", "1000", "10000"),
+                 times = c(length(Z100),
+                           length(Z1000),
+                           length(Z10000))))
+)
+ggplot(df, aes(x = n, y = Zn)) +
+  geom_boxplot(fill = "yellow") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(
+    title = "Boxplot des moyennes empiriques, pour n=100, 1000 et 10000",
+    x = "n",
+    y = "moyennes empiriques"
+  ) +
+  theme_minimal()
+```
+
+
+
+### Histogrammes 
+
+```{r}
+par(mfrow=c(1,2))
+hist(Z100, freq=FALSE, col="yellow", ylim=c(0,1.1))
+curve(dnorm(x, mean=0,sd=1), add=TRUE)
+par(mfrow=c(1,2))
+hist(Z1000, freq=FALSE, col="yellow", ylim=c(0,1.1)) #attention frequency en anglais veut dire "effectif" et non pas "fréquence"
+curve(dnorm(x,mean=0, sd=1), add=TRUE)
+hist(Z10000, freq=FALSE, col="yellow", ylim=c(0,1.1))
+curve(dnorm(x, mean=0,sd=1), add=TRUE)
+```
+
+
+
+
+# Variables de loi exponentielle
+
+```{r}
+lambda<- 2
+n<- 5000
+X<- rexp(n=n, rate=lambda) 
+mean(X) #attention E(X)=1/lambda
+median(X) #mediane empirique
+qexp(0.5, rate=lambda) 
+log(2)*(1/lambda) # "vraie médiane"
+# la médiane empirique converge (en probabilité et presque surement) vers la "vraie médiane" quand  la taille de l'échantillon (n) tend vers l'infini
+```
+
+
+```{r}
+n<-5000
+lambda=1
+k=1:n
+set.seed(123)
+X <- rexp(n, rate=1/lambda)
+x <- seq(0,10, l=1000)
+dx <- dexp(x, rate=1/lambda)
+```
+
+
+## Histogramme 
+
+
+
+```{r}
+library(ggplot2)
+D=3
+  ggplot() + geom_histogram(aes(x=X, y=after_stat(density),color="red", fill="red"), fill="red", 
+                            alpha=.4, colour="red", data=data.frame(X),breaks=seq(0,10,by=1/D))+
+  coord_cartesian(xlim = c(0,15))+ xlab("X")+ ylab("densité ")+
+  labs(title="histogramme, D=3 ",x="X", y = "densité") + theme(plot.title = element_text(face = "bold"))+
+    theme(plot.title = element_text(hjust = 0.5))+
+  geom_line(aes(x=x,y=dx),alpha=.4, colour="blue")+
+   theme(legend.text = element_text(colour="blue", size=10,                                      face="bold"))+
+  theme(legend.position.inside = c(0.8, 0.2))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Trajectoire de la moyenne empirique
+
+```{r}
+somme_cum<-cumsum(X)
+k<- 1:n
+y=somme_cum/k
+min(y)
+max(y) #permet de fixer les ylim
+M_x=1/lambda
+data=data.frame(k,y)
+data_b=data.frame(k,M_x)
+ggplot(data=data,aes(x=k,y=y))+
+  geom_line(color="blue")+
+  geom_line(data=data_b,aes(x=k,y=M_x),color="red")+
+  labs(x = "k", y = "xbar_k") +
+  ggtitle("Trajectoire de  la moyenne empirique en fonction de k")
+```
+
+
+
+## N réalisations indépendantes de $n$ variables de loi Exponentielle
+```{r}
+NExp <- function(N, n,lambda)
+{
+  X <- matrix(rexp(N * n,rate=lambda), nrow = N)
+  meanExp <- apply(X, 1, mean) # ou rowMeans(X)
+  medianExp <- apply(X, 1, median)
+  return(list(
+    mean = meanExp,
+    median = medianExp
+  ))
+}
+```
+
+
+
+## Distribution de la loi de la moyenne empirique
+```{r}
+X100=NExp(2000, 100,lambda)
+Xbar100=X100$mean
+Xmed100=X100$median
+X1000=NExp(2000, 1000,lambda)
+Xbar1000=X1000$mean
+Xmed1000=X1000$median
+X10000=NExp(2000, 10000,lambda)
+Xbar10000=X10000$mean
+Xmed10000=X10000$median
+```
+
+
+
+
+
+
+## Boxplot des N moyennes empiriques
+
+
+```{r}
+library(ggplot2)
+df <- data.frame(
+  Xbar = c(Xbar100, Xbar1000, Xbar10000),
+  n = factor(rep(c("100", "1000", "10000"),
+                 times = c(length(Xbar100),
+                           length(Xbar1000),
+                           length(Xbar10000))))
+)
+ggplot(df, aes(x = n, y = Xbar)) +
+  geom_boxplot(fill = "yellow") +
+  geom_hline(yintercept = lambda, color = "red") +
+  labs(
+    title = "Boxplot des moyennes empiriques, pour n=100, 1000 et 10000",
+    x = "n",
+    y = "moyennes empiriques"
+  ) +
+  theme_minimal()
+```
+
+## Distribution de la moyenne empirique centrée et normalisée 
+On trace les boîtes à moustaches et les histogrammes des variables
+$$Z_n=\frac{\sqrt{n}(\overline{X}-1/\lambda)}{\sqrt{1/\lambda^2}}.$$
+```{r}
+Z100<- lambda*(sqrt(100)*(Xbar100-1/lambda))
+Z1000<- lambda*(sqrt(1000)*(Xbar1000-1/lambda))
+Z10000<- lambda*(sqrt(10000)*(Xbar10000-1/lambda))
+```
+### Boxplot des moyennes empiriques centrées et renormalisées
+```{r}
+boxplot(Z100,Z1000,Z10000, col="yellow", 
+        main="Boxplot des  moyennes 
+        empiriques centrées et normalisées, pour n=100, 1000 et 10000")
+abline(0,0, col="red")
+```
+### Boxplot avec ggplot
+
+```{r}
+library(ggplot2)
+df <- data.frame(
+  Zn = c(Z100, Z1000, Z10000),
+  n = factor(rep(c("100", "1000", "10000"),
+                 times = c(length(Z100),
+                           length(Z1000),
+                           length(Z10000))))
+)
+
+ggplot(df, aes(x = n, y = Zn)) +
+  geom_boxplot(fill = "yellow") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(
+    title = "Boxplot des moyennes empiriques, pour n=100, 1000 et 10000",
+    x = "n",
+    y = "moyennes empiriques"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+### Histogramme des moyennes empiriques centrées et renormalisés
+```{r}
+par(mfrow=c(1,2))
+hist(Z100, freq=FALSE, col="yellow")
+curve(dnorm(x,mean=0, sd=1), add=TRUE,col="blue", ylim=c(0,0.9))
+hist(Z1000, freq=FALSE, col="yellow")
+curve(dnorm(x, mean=0,sd=1), add=TRUE,col="blue",ylim=c(0,0.9))
+#hist(Z10000, freq=FALSE, col="yellow")
+#curve(dnorm(x,mean=0, sd=1), add=TRUE,col="blue", ylim=c(0,0.9))
+# les distributions de Z100 et Z1000 sont  bien proches de la densité d'une N(0,1).
+```
+
+
+
+
+## Distribution de la médiane empirique
+
+
+## Boxplot des N médianes empiriques
+
+
+### sans ggplot
+
+```{r}
+boxplot(Xmed100,Xmed1000,Xmed10000, col="yellow", 
+        main="Boxplot des 1000 réalisations 
+de  la médiane empirique, pour n=100, 1000 et 10000")
+abline(qexp(0.5,rate=lambda),0, col="red") #droite hrizontale au niveau de la médiane théorique
+qexp(0.5,rate=lambda) #vraie médiane
+# on constate que la distribution de la médiane empirique est de moins en moins dispersée, autour de la médiane théorique
+```
+
+### avec ggplot
+
+```{r}
+library(ggplot2)
+median=log(2)*lambda
+df <- data.frame(
+  Xmed = c(Xmed100, Xmed1000, Xmed10000),
+  n = factor(rep(c("100", "1000", "10000"),
+                 times = c(length(Xmed100),
+                           length(Xmed1000),
+                           length(Xmed10000))))
+)
+ggplot(df, aes(x = n, y = Xmed)) +
+  geom_boxplot(fill = "yellow") +
+  geom_hline(yintercept = log(2)*1/lambda, color = "red") +
+  labs(
+    title = "Boxplot des médianes empiriques pour n=100, 1000 et 10000",
+    x = "n",
+    y = "médianes empiriques"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+## Distribution de la médiane empirique centrée et normalisée (TLC pour la médiane)
+```{r}
+Z100<- (Xmed100-qexp(0.5, rate=lambda)) * sqrt(100)
+Z1000<- (Xmed1000-qexp(0.5, rate=lambda)) * sqrt(1000)
+Z10000<- (Xmed10000-qexp(0.5, rate=lambda)) * sqrt(10000)
+```
+### Boîtes à moustaches des distributions de médianes empiriques centrées et normalisées
+```{r}
+boxplot(Z100,Z1000,Z10000, col="yellow", 
+        main="Boxplot des 1000 réalisations de  la médiane 
+empirique normalisée, pour n=100, 1000 et 10000")
+abline(0,0, col="red")
+```
+### Histogrammes des distributions des médianes empiriques centrées et normalisées
+```{r}
+par(mfrow=c(1,2))
+hist(Z1000, freq=FALSE, col="yellow",ylim=c(-0.1,1))
+curve(dnorm(x,mean=0, sd=sd(Z1000)), add=TRUE,col="blue")
+hist(Z10000, freq=FALSE, col="yellow",ylim=c(-0.1,1))
+curve(dnorm(x, mean=0,sd=sd(Z10000)), add=TRUE,col="blue")
+```
+
+
+
+
+# Variables aléatoires de Cauchy
+
+```{r}
+n<-100000
+X <- rcauchy(n)
+mean(X) 
+median(X) #mediane empirique
+qcauchy(0.5) #vraie médiane
+qcauchy(0.25)
+# la médiane empirique converge (en probabilité et presque surement) vers la "vraie médiane" quand  la taille de l'échantillon (n) tend vers l'infini
+x <- seq(-10,10, l=1000)
+dx <- dcauchy(x)
+```
+
+
+```{r}
+library(ggplot2)
+D=3
+  ggplot() + geom_histogram(aes(x=X, y=after_stat(density),color="red", fill="red"), fill="red", 
+                            alpha=.4, colour="red", data=data.frame(X),breaks=seq(-10,10,by=1/D))+
+  coord_cartesian(xlim = c(-10,10))+ xlab("X")+ ylab("densité ")+
+  labs(title="histogramme, D=3 ",x="X", y = "densité") + theme(plot.title = element_text(face = "bold"))+
+    theme(plot.title = element_text(hjust = 0.5))+
+  geom_line(aes(x=x,y=dx),alpha=.4, colour="blue")+
+   theme(legend.text = element_text(colour="blue", size=10,                                      face="bold"))+
+  theme(legend.position.inside = c(0.8, 0.2))
+```
+
+## Comportement de la moyenne empirique lorsque n augmente
+```{r}
+somme_cum<-cumsum(X)
+k<- 1:n
+m=min(somme_cum/k)
+M=max(somme_cum/k) # fournit des informations sur le ylim adapté
+y=somme_cum/k
+head(y)
+min(y)
+max(y) #permet de fixer les ylim
+M_x=0
+data=data.frame(k,y)
+data_b=data.frame(k,M_x)
+ggplot(data=data,aes(x=k,y=y))+
+  geom_line(color="blue")+
+  geom_line(data=data_b,aes(x=k,y=M_x),color="red")+
+  labs(x = "k", y = "xbar_k") +
+  ggtitle("Trajectoire de  la moyenne empirique en fonction de k")
+```
+
+
+
+
+On peut constater que $\overline{X}$ ne converge pas. On peut montrer théoriquement que la limite supérieure de $\overline{X}$ vaut presque surement l'infini. Pas de loi des grands nombres pour la loi de Cauchy
+
+
+## N réalisations indépendantes de $n$ variables de loi de Cauchy
+```{r}
+NCauchy <- function(N, n)
+{
+  X <- matrix(rcauchy(N * n), nrow = N)
+  apply(X, 1, median)
+  meanCauchy <- apply(X, 1, mean)
+  medianCauchy <- apply(X, 1, median)
+  return(list(
+    mean = meanCauchy,
+    median = medianCauchy
+  ))
+}
+```
+
+
+
+## Distribution de la moyenne empirique
+```{r}
+X100=NCauchy(2000, 100)
+Xbar100=X100$mean
+Xmed100=X100$median
+X1000=NCauchy(2000, 1000)
+Xbar1000=X1000$mean
+Xmed1000=X1000$median
+X10000=NCauchy(2000, 10000)
+Xbar10000=X10000$mean
+Xmed10000=X10000$median
+```
+
+
+```{r}
+library(ggplot2)
+df <- data.frame(
+  Xbar = c(Xbar100, Xbar1000, Xbar10000),
+  n = factor(rep(c("100", "1000", "10000"),
+                 times = c(length(Xbar100),
+                           length(Xbar1000),
+                           length(Xbar10000))))
+)
+ggplot(df, aes(x = n, y = Xbar)) +
+  geom_boxplot(fill = "yellow") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(
+    title = "Boxplot des moyennes empiriques, pour n=100, 1000 et 10000",
+    x = "n",
+    y = "moyennes empiriques"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+```{r}
+library(ggplot2)
+df <- data.frame(
+  Xmed = c(Xmed100, Xmed1000, Xmed10000),
+  n = factor(rep(c("100", "1000", "10000"),
+                 times = c(length(Xmed100),
+                           length(Xmed1000),
+                           length(Xmed10000))))
+)
+ggplot(df, aes(x = n, y = Xmed)) +
+  geom_boxplot(fill = "yellow") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(
+    title = "Boxplot des médianes empiriques, pour n=100, 1000 et 10000",
+    x = "n",
+    y = "médianes empiriques"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+
+
+```{r}
+hist(Xbar100, breaks=c(min(Xbar100),-5,-4.5,-4,-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0,
+                 0.5,1,1.5,2,2.5,3, 3.5,4, 4.5,5, max(Xbar100)), xlim=c(-5,5),
+     ylim=c(0,0.33))
+curve(dcauchy(x), add=TRUE, col="red")
+
+hist(Xbar1000, breaks=c(min(Xbar1000),-5,-4.5,-4,-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0,
+                    0.5,1,1.5,2,2.5,3, 3.5,4, 4.5,5, max(Xbar1000)), xlim=c(-5,5),
+     ylim=c(0,0.33))
+curve(dcauchy(x), add=TRUE, col="red")
+
+hist(Xbar10000, breaks=c(min(Xbar10000),-5,-4.5,-4,-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0,
+                    0.5,1,1.5,2,2.5,3, 3.5,4, 4.5,5, max(Xbar10000)), xlim=c(-5,5),
+     ylim=c(0,0.33))
+curve(dcauchy(x), add=TRUE, col="red")
+```
+
+
+
+
+## N réalisations indépendantes de la médiane empirique
+```{r}
+NmedianCauchy <- function(N, n)
+{
+  M <- apply(matrix(rcauchy(N * n), nrow = N),
+             1,median)
+  return(M)
+}
+
+```
+### Boîtes à moustaches de la médiane empirique
+```{r}
+boxplot(Xmed100,Xmed1000,Xmed10000, col="yellow", 
+        main="Boxplot des 1000 réalisations 
+de  la médiane empirique, pour n=100, 1000 et 10000")
+abline(0,0, col="red")
+# dispersion de la médiane empirique tend vers 0 quand la taille (n) de l'échantillon tend vers l'infini
+```
+
+## Distribution de la médiane empirique centrée et normalisée
+```{r}
+Z100<- (Xmed100-0) * sqrt(100)
+Z1000<- Xmed1000 * sqrt(1000)
+Z10000<- Xmed10000 * sqrt(10000)
+# la vitesse de convergence de la médiane empirique vers la "vraie médiane" est 1/sqrt(n) car les boites à moustaches sont "stabilisées"
+```
+### Boites à moustaches de la médiane empiriques centrée et normalisée
+```{r}
+boxplot(Z100,Z1000,Z10000, col="yellow", 
+        main="Boxplot des 1000 réalisations de  la médiane 
+empirique normalisée, pour n=100, 1000 et 10000")
+abline(0,0, col="red")
+```
+### Histogramme des médianes empiriques centrées et normalisées
+```{r}
+par(mfrow=c(1,2))
+hist(Z1000, freq=FALSE, col="yellow")
+curve(dnorm(x,mean=0, sd=sd(Z1000)), add=TRUE)
+hist(Z10000, freq=FALSE, col="yellow")
+curve(dnorm(x, mean=0,sd=sd(Z10000)), add=TRUE)
+```
+La distribution de $$\sqrt{n}(\mbox{Med}_n-0)$$ est proche de la distribution gaussienne centrée car l'histogramme de la distribution de la médiane empirique est proche de la densité de la gaussienne centrée. On écrira donc
+$$\sqrt{n}(\mbox{Med}_n-0) \cvl \mathcal{N}(0,c),$$
+avec $c$ inconnue mais estimable.
+
+
+
+
+
+
+
+
+
+
+
+
