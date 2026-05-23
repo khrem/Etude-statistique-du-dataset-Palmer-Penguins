@@ -1,0 +1,229 @@
+---
+title: "Etude du jeu de données birthwt"
+author: "ML Taupin"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    keep_tex: true 
+header-includes:
+  - \usepackage{tikz,lipsum,lmodern}
+  - \usepackage[most]{tcolorbox}
+  - \usepackage{t1enc}
+  - \usepackage[T1]{fontenc}
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{color}
+  - \usepackage{tcolorbox}
+  - \usepackage{titlesec}
+  - \usepackage{xcolor}
+  - \usepackage{graphicx}
+  - \newcommand\ind{{\mathbf{1}\hspace{-0.8mm}{\mathrm I}}}
+  - \def\cvl{\xrightarrow[n \to \infty]{\mathcal{L}}}
+  - \def\cvHps{\xrightarrow[n_1,n_2 \to \infty]{H_0,p.s.}}
+  - \def\cvH1ps{\xrightarrow[n_1,n_2 \to \infty]{H_1,p.s.}}
+  - \def\cvlH1n1{\xrightarrow[n_1,n_2 \to \infty]{\mathcal L, H_1,}}
+  - \def\cvlH0n{\xrightarrow[n_1,n_2 \to \infty]{\mathcal L, H_0}}
+  - \def\cvlH0{\xrightarrow[n \to \infty]{\mathcal L, H_0}}
+  - \def\cvp{\xrightarrow[n \to \infty]{\mathbb P}}
+  - \def\cvps{\xrightarrow[n \to \infty]{p.s.}}
+  - \def\cvmq{\xrightarrow[n \to \infty]{\mathbb L^2}}
+  - \def\cvlp{\xrightarrow[n \to \infty]{\mathbb L^p}}
+  - \def\cvlq{\xrightarrow[n \to \infty]{\mathbb L^q}}
+---
+# Les grandes étapes
+
+## Etude du contexte et des variables du jeu de données
+
+## Faire apparaitre la variable "cible"
+
+## Identifier les types des variables (qualitatives, quantitatives discrètes ou quantitatives continues)
+
+## Changer les variables qualitatives en "factor" (R ne doit plus fait d'opération dessus) avec la commande \textit{mutate}
+
+## Vérifier si il y a des données manquantes
+
+# Les graphiques:
+
+## Pour les variables continues: histogrammes ou boites à moustaches
+
+## pour les variables discrètes: diagramme en bâtons
+
+## Pour les variables qualitatives: diagramme en bâtons
+
+# Résumé des tests adaptés
+
+
+
+```{r}
+knitr::opts_chunk$set(fig.height=5, fig.width=7)
+```
+
+
+```{r,include=FALSE,echo=FALSE}
+knitr::opts_chunk$set(fig.height=5, fig.width=7)
+library(MASS)
+library(dplyr,quietly=TRUE)
+library(plyr)
+library(ggplot2,quietly=TRUE)
+library(nortest)
+library(knitr)
+library(stats)
+library(scales)
+library(robusTest) #****
+opts_template$set(figure1 = list(fig.height = 4, fig.width = 4),
+                  figure2 = list(fig.height = 2, fig.width = 5),
+                  figure3 = list(fig.height =10, fig.width = 14))
+```
+```{r}
+help(birthwt) # informations sur le jeu de données
+glimpse(birthwt)
+summary(birthwt)
+# bcp de variables pour lesquelles les opérations mathématiques ne sont pas pertinentes car
+#ce sont des codages pour des variables qui sont en fait qualitatives.
+dim(birthwt)
+# données manquantes?
+na_count = cbind(1:ncol(birthwt), sapply(birthwt, function(j) sum(length(which(is.na(j))))))
+na_count
+birthwt$smoke_ht=birthwt$smoke*birthwt$ht
+#=> pas de données manquantes (au sens de R)
+birthwt = mutate(birthwt, smoke=factor(smoke),
+                  low = factor(low),
+                  race = factor(race),
+                  ui = factor(ui),
+                 ht=factor(ht),
+                 smoke_ht=factor(smoke_ht)
+)
+summary(birthwt)
+#low ne connait pas la variable low avant le attach
+birthwt$low
+attach(birthwt,warn.conflicts=FALSE)
+low
+# à partir de maintenant on peut utiliser les noms des variables
+#sans mettre "birthwt$nom de la variable" devant.
+glimpse(birthwt)
+```
+# Quelques graphiques
+
+## Distribution en fréquence de la variable "low"
+```{r,opts.label = "figure2"}
+# Diagramme en bâtons
+ggplot(birthwt, aes(x = as.factor(low))) +
+  geom_bar(fill = "steelblue", aes(y = (after_stat(count))/sum(after_stat(count)))) +  theme_bw()+
+  geom_text(aes(y = ((after_stat(count))/sum(after_stat(count))), label = scales::percent((after_stat(count))/sum(after_stat(count)))), stat = "count", vjust = -0.25) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Répartition BB de poids normal (low=0) vs. BB de faible poids (low=1)", y = "Percent", x = "BB de faible poids (low)")+
+  theme(plot.title = element_text(color="red", size=8, face="bold.italic"))+
+ scale_y_continuous(limit = c(0, 1))
+ggsave(filename = "distribution_low.png",
+       height = 8.5, # Fournir les dimensions voulues
+       width = 11,
+       units = "in")
+```
+
+
+```{r}
+chisq.test(smoke,low, correct=FALSE)
+```
+petite pvalue=> rejet de HO=> les variables $smoke$ et $low$ ne sont pas indépendantes
+```{r}
+chisq.test(low,smoke,correct=F)$observed  #effectifs observés
+chisq.test(low,smoke,correct=F)$expected  #effectifs théoriques ou attendus
+```
+On rejette $H_0$ et on conclut que $smoke$ et $low$ sont liées.
+
+
+# Lien entre low et autres variables qualitatives
+```{r}
+chisq.test(low,smoke) # les variables ne semblent pas indépendantes
+chisq.test(low,ui) #les variables sont liées
+chisq.test(low,ht) #effectifs théoriques pas tous plus grand que 5
+chisq.test(low,ht)$expected # un des effectifs <5 => test de fisher exact...
+fisher.test(low,ht)# on rejette H0 et on conclut que les variables sont liées
+chisq.test(ht,smoke)
+fisher.test(ht,smoke)
+chisq.test(smoke,ui)
+chisq.test(race,low)
+chisq.test(low,ftv) #warning
+chisq.test(low,ftv)$expected #il faut regroupe les classes 2,3,4 et 6
+fisher.test(low,ftv)
+ftv_new=rep(0,length(ftv))
+ftv_new[ftv >=2]="2346"
+ftv_new[ftv==0]=0
+ftv_new[ftv==1]=1
+ftv_new
+chisq.test(low,ftv_new) #OK, pas de problème d'approximation On ne rejette pas H0: les variables low et ftv_new sont indépendantes
+chisq.test(low,ptl)
+chisq.test(low,ptl)$expected
+ptl_new=rep(0,length(ptl))
+ptl_new[ptl==0]=0
+ptl_new[ptl >=1]="123"
+chisq.test(ptl_new,low)$expected
+chisq.test(ptl_new,low) #On rejette HO: les variables ptl_new et low sont liées
+fisher.test(low,ptl)
+chisq.test(ui,ptl)
+chisq.test(ui,ptl_new)$expected #PB=> test de fisher exact
+fisher.test(ui,ptl)
+chisq.test(smoke_ht,low)
+chisq.test(smoke_ht,low)$expected #PB: test de fisher exact
+fisher.test(smoke_ht,low) #p-value = 0.1767: difficile de conclure
+```
+
+
+```{r,opts.label = "figure2"}
+#Boite à moustaches
+ggplot(birthwt, aes(low, lwt)) +
+  geom_boxplot(aes(fill = low))+labs(title="Boxplot poids de la mère selon low ",x="low", y = "lwt") + theme(plot.title = element_text(face = "bold"))
+```
+```{r,opts.label = "figure2"}
+#Boite à moustaches
+ggplot(birthwt, aes(race, lwt)) +
+  geom_boxplot(aes(fill = race))+labs(title="Boxplot poids de la mère selon la race",x="race", y = "lwt") + theme(plot.title = element_text(face = "bold"))
+```
+
+```{r,opts.label = "figure2"}
+library(MASS)
+library(ggplot2)
+library(plyr)
+
+birthwtlow0 <- subset(birthwt, low == "0")
+birthwtlow1 <- subset(birthwt, low == "1")
+
+mu <- ddply(birthwt, "low", summarise, grp.mean = mean(lwt))
+mu$low <- factor(mu$low)
+
+ggplot() +
+  geom_histogram(
+    aes(x = lwt, y = after_stat(count) * 100 / sum(after_stat(count))),
+    fill = "red", alpha = .4, colour = "red",
+    data = birthwtlow0, binwidth = 10
+  ) +
+  geom_histogram(
+    aes(x = lwt, y = after_stat(count) * 100 / sum(after_stat(count))),
+    fill = "blue", alpha = .4, colour = "blue",
+    data = birthwtlow1, binwidth = 10
+  ) +
+  geom_vline(
+    data = mu,
+    aes(xintercept = grp.mean, color = low),
+    linetype = "dashed"
+  ) +
+  scale_colour_manual(
+    name = "Groupe",
+    values = c("0" = "red", "1" = "blue"),
+    labels = c("0" = "low = 0", "1" = "low = 1")
+  ) +
+  coord_cartesian(xlim = c(70, 270)) +
+  xlab("poids de la mère") +
+  ylab("pourcentage (%)") +
+  labs(title = "Histogramme poids des mères BB selon low", x = "lwt", y = "Pourcentage") +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5)) +
+  annotate(geom = "text", x = 220, y = 20, label = "Histogramme lwt / low=0", color = "red") +
+  annotate(geom = "text", x = 200, y = 10, label = "Histogramme lwt / low=1", color = "blue")
+```
+
+```{r, results='asis'}
+cat("\\brokencommand")
+```
+
