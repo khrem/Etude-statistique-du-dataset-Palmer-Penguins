@@ -1,0 +1,583 @@
+---
+title: "Palmer Penguins : Classification binaire Adelie vs Gentoo"
+author: "Prénom Nom"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    keep_tex: false
+header-includes:
+  - \usepackage{tikz,lipsum,lmodern}
+  - \usepackage[most]{tcolorbox}
+  - \usepackage{t1enc}
+  - \usepackage[T1]{fontenc}
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{color}
+  - \usepackage{tcolorbox}
+  - \usepackage{titlesec}
+  - \usepackage{xcolor}
+  - \usepackage{graphicx}
+  - \usepackage{booktabs}
+  - \usepackage{float}
+  - \newcommand\ind{{\mathbf{1}\hspace{-0.8mm}{\mathrm I}}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.height = 4, fig.width = 7,
+                      fig.align = "center")
+```
+
+```{r chargement-packages, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(knitr)
+library(tidyr)
+library(scales)
+library(robusTest)
+```
+
+---
+
+\newpage
+
+# Introduction
+
+## Contexte de l'étude
+
+Le jeu de données *Palmer Penguins* a été collecté par la chercheuse Kristen Gorman à la station Palmer en Antarctique entre 2007 et 2009. Il contient des mesures morphométriques de trois espèces de manchots : Adelie, Chinstrap et Gentoo. Dans le cadre de ce projet, nous travaillons sur une version restreinte à deux espèces --- Adelie et Gentoo --- afin de mener une étude de classification binaire. La variable `sex` a été retirée et l'espèce Chinstrap exclue du jeu de données.
+
+Ce jeu de données présente une caractéristique remarquable : les Gentoo sont morphométriquement très distincts des Adelie. Conséquence statistique : tous les tests de liaison entre `species` et une variable morphométrique rejettent $H_0$ avec des p-values extrêmement faibles. Un rapport solide ne se contente donc pas d'aligner des p-values ; il doit décrire l'ampleur des écarts, contraster avec le test non significatif (species $\times$ year), confirmer par des tests non paramétriques, et analyser la structure de corrélation des variables continues.
+
+## Présentation des objectifs de l'étude
+
+L'objectif principal de cette étude est de déterminer, à l'aide des outils statistiques du cours, quelles variables sont liées à l'espèce de manchot. Plus précisément, nous souhaitons :
+
+1. identifier les variables significativement liées à `species` ;
+2. quantifier l'ampleur des différences entre les deux groupes ;
+3. étudier la structure de corrélation entre les variables continues ;
+4. mettre en évidence le paradoxe de Simpson sur les dimensions du bec.
+
+## Présentation des variables
+
+### Chargement et préparation des données
+
+```{r chargement-donnees}
+penguins <- read.csv("penguins_binary_classification.csv")
+glimpse(penguins)
+```
+
+```{r preparation-donnees}
+# Vérification des données manquantes
+na_count <- sapply(penguins, function(j) sum(is.na(j)))
+na_count
+```
+
+```{r facteurs}
+penguins <- mutate(penguins,
+                   species = factor(species),
+                   island  = factor(island),
+                   year    = factor(year))
+attach(penguins, warn.conflicts = FALSE)
+summary(penguins)
+```
+
+### La variable cible
+
+La variable cible est `species`, variable qualitative binaire prenant les modalités Adelie et Gentoo. La répartition est relativement équilibrée.
+
+```{r repartition-species}
+table(species)
+prop.table(table(species))
+```
+
+### Les variables et leur type
+
+Le jeu de données comporte 7 variables dont le détail est présenté ci-dessous.
+
+```{r tableau-variables, results='asis'}
+tab_var <- data.frame(
+  Variable    = c("species", "island", "bill\\_length\\_mm", "bill\\_depth\\_mm",
+                  "flipper\\_length\\_mm", "body\\_mass\\_g", "year"),
+  Type        = c("Qual. binaire", "Qual. 3 mod.", "Continue", "Continue",
+                  "Continue", "Continue", "Discrète, 3 mod."),
+  Description = c("Adelie (151) / Gentoo (123)", "Biscoe (167), Dream (56), Torgersen (51)",
+                  "Longueur du bec (mm)", "Profondeur du bec (mm)",
+                  "Longueur des nageoires (mm)", "Masse corporelle (g)",
+                  "2007 (83), 2008 (96), 2009 (95)"),
+  Role        = c("Cible", "Explicative", "Explicative", "Explicative",
+                  "Explicative", "Explicative", "Secondaire")
+)
+kable(tab_var, caption = "Description des variables du jeu de données.",
+      booktabs = TRUE)
+```
+
+### Statistiques descriptives des variables continues
+
+```{r stats-descriptives, results='asis'}
+vars_cont <- c("bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g")
+
+stats_par_espece <- penguins %>%
+  group_by(species) %>%
+  summarise(across(all_of(vars_cont),
+                   list(moy = ~round(mean(.), 1), sd = ~round(sd(.), 1)),
+                   .names = "{.col}_{.fn}"))
+
+# Formater moy ± sd pour chaque variable
+format_moy_sd <- function(df, var) {
+  paste0(df[[paste0(var, "_moy")]], " ± ", df[[paste0(var, "_sd")]])
+}
+
+tab_stats <- data.frame(
+  Variable         = vars_cont,
+  Adelie_n151      = sapply(vars_cont, function(v)
+    format_moy_sd(stats_par_espece[stats_par_espece$species == "Adelie", ], v)),
+  Gentoo_n123      = sapply(vars_cont, function(v)
+    format_moy_sd(stats_par_espece[stats_par_espece$species == "Gentoo", ], v))
+)
+names(tab_stats) <- c("Variable", "Adelie (n=151)", "Gentoo (n=123)")
+kable(tab_stats, caption = "Statistiques descriptives des variables continues par espèce (moyenne ± écart-type).",
+      booktabs = TRUE, row.names = FALSE)
+```
+
+### Les données manquantes
+
+```{r donnees-manquantes}
+# Vérification : 0 données manquantes attendu
+colSums(is.na(penguins))
+```
+
+Le jeu de données ne contient aucune donnée manquante. Les `r nrow(penguins)` observations sont complètes pour les 7 variables. Aucun traitement d'imputation n'est donc nécessaire.
+
+---
+
+# Présentation des graphiques adaptés
+
+Nous présentons ici les graphiques descriptifs retenus pour explorer le jeu de données. Le choix du type de graphique est guidé par la nature des variables.
+
+## Pour les variables qualitatives : diagramme en bâtons
+
+La figure ci-dessous montre la répartition de la variable cible `species`. L'équilibre relatif (55 % / 45 %) est favorable à l'analyse statistique.
+
+```{r graph-species, fig.cap="Répartition des espèces dans le jeu de données (Adelie : 151, Gentoo : 123)."}
+ggplot(penguins, aes(x = species, fill = species)) +
+  geom_bar() +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5, size = 4) +
+  scale_fill_manual(values = c("Adelie" = "steelblue", "Gentoo" = "darkorange")) +
+  labs(title = "Répartition des espèces", y = "Effectif", x = "Espèce") +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+La figure suivante croise `island` et `species`. On constate immédiatement que les Gentoo ne sont présents que sur l'île de Biscoe, tandis que les Adelie sont répartis sur les trois îles. Ce résultat géographique sera confirmé par le test du $\chi^2$ au chapitre suivant.
+
+```{r graph-island-species, fig.cap="Répartition des espèces par île. Les Gentoo sont exclusivement présents sur Biscoe."}
+ggplot(penguins, aes(x = island, fill = species)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = c("Adelie" = "steelblue", "Gentoo" = "darkorange")) +
+  labs(title = "Répartition des espèces par île", y = "Effectif",
+       x = "Île", fill = "Espèce") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+## Pour les variables discrètes : diagramme en bâtons
+
+La figure suivante croise `year` et `species`. Les proportions d'espèces sont stables d'une année à l'autre, ce qui suggère l'indépendance entre année et espèce.
+
+```{r graph-year-species, fig.cap="Répartition des espèces par année d'observation. Les proportions sont stables."}
+ggplot(penguins, aes(x = year, fill = species)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = c("Adelie" = "steelblue", "Gentoo" = "darkorange")) +
+  labs(title = "Répartition des espèces par année", y = "Effectif",
+       x = "Année", fill = "Espèce") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+## Pour les variables continues : boîtes à moustaches
+
+La figure suivante présente les boîtes à moustaches des quatre variables continues, facettées par espèce. La séparation entre Adelie et Gentoo est flagrante pour les quatre variables : les boîtes ne se recouvrent quasiment pas. La longueur des nageoires (`flipper_length_mm`) présente la séparation la plus nette.
+
+```{r graph-boxplots, fig.height=5.5, fig.cap="Boîtes à moustaches des quatre variables continues par espèce. L'absence de recouvrement illustre la quasi-séparation entre Adelie et Gentoo."}
+penguins %>%
+  pivot_longer(cols = all_of(vars_cont),
+               names_to = "variable", values_to = "valeur") %>%
+  mutate(variable = factor(variable,
+    levels = vars_cont,
+    labels = c("Longueur du bec (mm)", "Profondeur du bec (mm)",
+               "Longueur des nageoires (mm)", "Masse corporelle (g)"))) %>%
+  ggplot(aes(x = species, y = valeur, fill = species)) +
+  geom_boxplot(alpha = 0.7) +
+  facet_wrap(~ variable, scales = "free_y") +
+  scale_fill_manual(values = c("Adelie" = "steelblue", "Gentoo" = "darkorange")) +
+  labs(title = "Distribution des variables continues par espèce",
+       x = "Espèce", y = "Valeur", fill = "Espèce") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        legend.position = "bottom")
+```
+
+## Nuage de points et paradoxe de Simpson
+
+La figure ci-dessous montre la relation entre la longueur et la profondeur du bec, avec les droites de régression par espèce (traits pleins) et la droite de régression globale (pointillés noirs). On observe un **paradoxe de Simpson** : globalement, la corrélation est négative ($r = -0{,}55$), mais au sein de chaque espèce elle est positive (Adelie : $r = +0{,}39$, Gentoo : $r = +0{,}64$). L'espèce agit comme variable confondante.
+
+```{r graph-simpson, fig.cap="Paradoxe de Simpson : la corrélation entre longueur et profondeur du bec est négative globalement (pointillés) mais positive au sein de chaque espèce (traits pleins)."}
+ggplot(penguins, aes(x = bill_length_mm, y = bill_depth_mm, color = species)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  geom_smooth(aes(group = 1), method = "lm", se = FALSE,
+              color = "black", linetype = "dashed", linewidth = 1) +
+  scale_color_manual(values = c("Adelie" = "steelblue", "Gentoo" = "darkorange")) +
+  labs(title = "Paradoxe de Simpson : longueur vs profondeur du bec",
+       x = "Longueur du bec (mm)", y = "Profondeur du bec (mm)",
+       color = "Espèce", linetype = "Tendance globale") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+## Pairs plot
+
+La figure suivante synthétise les distributions, corrélations et séparations entre espèces en une seule image. On y retrouve la quasi-séparation pour chaque paire de variables continues.
+
+```{r graph-pairs, fig.height=6, fig.width=7, fig.cap="Pairs plot : distributions marginales (diagonale), nuages de points (triangle inférieur) colorés par espèce."}
+ggpairs(penguins,
+        columns = which(names(penguins) %in% vars_cont),
+        aes(color = species, alpha = 0.6),
+        upper = list(continuous = wrap("cor", size = 3)),
+        diag  = list(continuous = wrap("densityDiag", alpha = 0.5)),
+        lower = list(continuous = wrap("points", alpha = 0.5, size = 0.8))) +
+  scale_color_manual(values = c("Adelie" = "steelblue", "Gentoo" = "darkorange")) +
+  scale_fill_manual(values  = c("Adelie" = "steelblue", "Gentoo" = "darkorange")) +
+  labs(title = "Pairs plot : variables continues par espèce") +
+  theme_bw(base_size = 9) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+## Matrice de corrélation
+
+La figure suivante présente la matrice de corrélation de Pearson entre les variables continues, calculée sur l'ensemble des données. Les corrélations les plus fortes sont observées entre `flipper_length_mm` et `body_mass_g` ($r = 0{,}88$), et entre `bill_length_mm` et `body_mass_g` ($r = 0{,}88$). La corrélation négative entre `bill_length_mm` et `bill_depth_mm` ($r = -0{,}55$) est trompeuse en raison du paradoxe de Simpson.
+
+```{r graph-corrplot, fig.height=4.5, fig.cap="Matrice de corrélation de Pearson entre les variables continues (données globales)."}
+# Calcul de la matrice de corrélation
+mat_cor <- cor(penguins[, vars_cont], use = "complete.obs")
+rownames(mat_cor) <- colnames(mat_cor) <-
+  c("Lg. bec", "Pr. bec", "Lg. nageoire", "Masse")
+
+# Mise en forme long pour ggplot
+mat_long <- as.data.frame(as.table(mat_cor))
+names(mat_long) <- c("Var1", "Var2", "r")
+
+ggplot(mat_long, aes(x = Var1, y = Var2, fill = r)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sprintf("%.2f", r)), size = 4) +
+  scale_fill_gradient2(low = "steelblue", mid = "white", high = "darkorange",
+                       midpoint = 0, limits = c(-1, 1)) +
+  labs(title = "Matrice de corrélation (Pearson) — données globales",
+       x = NULL, y = NULL, fill = "r") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+---
+
+# Présentation des tests adaptés
+
+Ce chapitre rappelle les fondements théoriques des tests statistiques utilisés dans l'étude.
+
+## Indépendance entre variables qualitatives : test du $\chi^2$ d'indépendance
+
+Pour étudier la liaison entre deux variables qualitatives (ou quantitatives discrètes avec peu de modalités), on utilise le **test du $\chi^2$ d'indépendance**. On souhaite tester :
+
+$$
+(H_0) : X \text{ et } Y \text{ sont indépendantes} \quad \text{contre} \quad (H_1) : X \text{ et } Y \text{ sont liées.}
+$$
+
+La statistique de test est :
+$$
+T_n = \sum_{j=1}^{J} \sum_{k=1}^{K} \frac{\left(N_{j,k} - \frac{N_{j\cdot} N_{\cdot k}}{n}\right)^2}{\frac{N_{j\cdot} N_{\cdot k}}{n}}.
+$$
+
+Sous $(H_0)$, si les effectifs théoriques sont suffisamment importants ($\frac{N_{j\cdot}N_{\cdot k}}{n} \geq 5$ pour tout $(j,k)$), alors $T_n \xrightarrow[n\to\infty]{\mathcal{L},H_0} \chi^2\bigl((J-1)(K-1)\bigr)$.
+
+**Remarques.**
+
+1. S'il existe une classe telle que l'effectif théorique est inférieur à 5, on regroupe deux (ou plus) classes. En R : `chisq.test(V1, V2)$expected`.
+2. Si les variables n'ont que 2 modalités et qu'on ne peut pas regrouper, on utilise le test exact de Fisher (`fisher.test` en R).
+3. Le nombre de degrés de liberté est $(J-1)(K-1)$. La commande R est `chisq.test`.
+
+## Liaison entre une variable continue et une variable qualitative à 2 modalités
+
+### Test d'égalité d'espérances pour échantillons indépendants (test de Welch)
+
+Considérons $X_1,\ldots,X_{n_1}$ i.i.d. de loi $P_X$ et $Y_1,\ldots,Y_{n_2}$ i.i.d. de loi $P_Y$, avec les deux échantillons indépendants. On souhaite tester :
+$$
+(H_0) : \mathbb{E}(X) = \mathbb{E}(Y) \quad \text{contre} \quad (H_1) : \mathbb{E}(X) \neq \mathbb{E}(Y).
+$$
+
+La statistique de test de Welch est :
+$$
+T_{n_X, n_Y} = \frac{\bar X - \bar Y}{\sqrt{\frac{S_X^2}{n_X} + \frac{S_Y^2}{n_Y}}},
+$$
+avec $S_X^2 = \frac{1}{n_X-1}\sum_{i=1}^{n_X}(X_i - \bar X)^2$ et $S_Y^2$ de façon analogue. Sous $H_0$, $T_{n_X,n_Y} \xrightarrow[]{\mathcal{L},H_0} \mathcal{N}(0,1)$. On rejette $H_0$ quand $|T_{n_X,n_Y}| \geq u_\alpha$ où $u_\alpha$ est le quantile d'ordre $1-\alpha/2$ de $\mathcal{N}(0,1)$.
+
+La validité asymptotique repose sur le Théorème Central Limite. Avec $n_1 = 151$ et $n_2 = 123$, l'approximation gaussienne est excellente. La commande R est `t.test(X ~ Y, var.equal = FALSE)`.
+
+### Test de Kolmogorov-Smirnov à 2 échantillons
+
+Pour tester $(H_0) : F_X = F_Y$ contre $(H_1) : F_X \neq F_Y$, la statistique de test est :
+$$
+\sqrt{\frac{n_X n_Y}{n_X + n_Y}} \sup_{x \in \mathbb{R}} \left|\hat F_{n_X}(x) - \hat G_{n_Y}(x)\right|.
+$$
+La commande R est `ks.test`.
+
+### Test de la somme des rangs de Wilcoxon (Mann-Whitney)
+
+Pour tester la différence de médianes entre deux groupes :
+$$
+(H_0) : \mathrm{Med}(Y - X) = 0 \quad \text{contre} \quad (H_1) : \mathrm{Med}(Y - X) \neq 0.
+$$
+La commande R est `wilcox.test`.
+
+## Liaison entre variables continues
+
+### Test de corrélation de Pearson
+
+Soient $(X_1, Y_1), \ldots, (X_n, Y_n)$ des couples de v.a. quantitatives i.i.d. On note $\rho$ le coefficient de corrélation entre $X_i$ et $Y_i$. On souhaite tester $(H_0) : \rho = 0$ contre $(H_1) : \rho \neq 0$. Sous $H_0$, la statistique de test converge en loi vers $\mathcal{N}(0,1)$. La commande R est `cor.test`.
+
+### Test d'indépendance de Kolmogorov-Smirnov
+
+Pour tester l'indépendance entre deux variables continues $(X, Y)$, on utilise la statistique basée sur la distance entre la fonction de répartition empirique jointe et le produit des fonctions marginales. La commande R est `indeptest` (package `robusTest`).
+
+---
+
+# Mise en œuvre sur le jeu de données
+
+Ce chapitre présente les résultats des tests statistiques appliqués au jeu de données Palmer Penguins.
+
+## Test du $\chi^2$ : species $\times$ island
+
+On teste l'indépendance entre l'espèce et l'île à l'aide du test du $\chi^2$.
+
+```{r chi2-island}
+# Table de contingence observée
+tab_island <- table(species, island)
+tab_island
+```
+
+```{r chi2-island-expected, results='asis'}
+# Effectifs théoriques sous H0
+exp_island <- chisq.test(species, island, correct = FALSE)$expected
+kable(round(exp_island, 1),
+      caption = "Effectifs théoriques sous $H_0$ : species $\\times$ island.",
+      booktabs = TRUE)
+```
+
+Tous les effectifs théoriques sont supérieurs ou égaux à 5 (le minimum vaut `r round(min(chisq.test(species, island)$expected), 1)`). Le test du $\chi^2$ est donc parfaitement valide et le test exact de Fisher n'est pas requis.
+
+```{r chi2-island-test}
+chisq.test(species, island, correct = FALSE)
+```
+
+**Décision :** On rejette $H_0$ au niveau $\alpha = 5\,\%$. Les variables `species` et `island` sont liées. Ce résultat s'explique par le fait que les Gentoo sont exclusivement présents sur l'île de Biscoe (zéros structurels dans la table de contingence).
+
+## Test du $\chi^2$ : species $\times$ year
+
+On teste l'indépendance entre l'espèce et l'année d'observation.
+
+```{r chi2-year}
+# Table de contingence observée
+tab_year <- table(species, year)
+tab_year
+```
+
+```{r chi2-year-expected, results='asis'}
+exp_year <- chisq.test(species, year, correct = FALSE)$expected
+kable(round(exp_year, 1),
+      caption = "Effectifs théoriques sous $H_0$ : species $\\times$ year.",
+      booktabs = TRUE)
+```
+
+Les effectifs théoriques sont tous supérieurs à 5 (minimum : `r round(min(chisq.test(species, year)$expected), 1)`).
+
+```{r chi2-year-test}
+chisq.test(species, year, correct = FALSE)
+```
+
+**Décision :** On ne rejette pas $H_0$ au niveau $\alpha = 5\,\%$. Les variables `species` et `year` sont indépendantes. L'échantillonnage n'est donc pas biaisé temporellement : les proportions d'espèces sont stables d'une année à l'autre. Ce résultat constitue un contre-exemple utile face aux tests hautement significatifs qui suivent.
+
+## Tests de Welch : species $\times$ variables continues
+
+Pour chacune des quatre variables continues, on applique le test de Welch (`t.test` avec `var.equal = FALSE`) pour comparer les moyennes entre Adelie et Gentoo.
+
+**Justification du test :** la validité asymptotique de la statistique de Welch repose sur le Théorème Central Limite. Avec $n_1 = 151$ et $n_2 = 123$, l'approximation gaussienne est excellente.
+
+```{r welch-bill-length}
+t.test(bill_length_mm ~ species, var.equal = FALSE)
+```
+
+```{r welch-bill-depth}
+t.test(bill_depth_mm ~ species, var.equal = FALSE)
+```
+
+```{r welch-flipper}
+t.test(flipper_length_mm ~ species, var.equal = FALSE)
+```
+
+```{r welch-body-mass}
+t.test(body_mass_g ~ species, var.equal = FALSE)
+```
+
+```{r moyennes-par-espece}
+# Moyennes par groupe
+aggregate(cbind(bill_length_mm, bill_depth_mm,
+                flipper_length_mm, body_mass_g) ~ species,
+          data = penguins, FUN = mean)
+```
+
+```{r tableau-welch, results='asis'}
+# Calcul des résultats pour le tableau de synthèse des tests de Welch
+resultats_welch <- lapply(vars_cont, function(v) {
+  res <- t.test(as.formula(paste(v, "~ species")), data = penguins, var.equal = FALSE)
+  moy <- aggregate(as.formula(paste(v, "~ species")), data = penguins, FUN = mean)
+  data.frame(
+    Variable     = v,
+    Moy_Adelie   = round(moy[moy$species == "Adelie",   v], 1),
+    Moy_Gentoo   = round(moy[moy$species == "Gentoo",   v], 1),
+    p_value      = formatC(res$p.value, format = "e", digits = 2),
+    IC_inf       = round(res$conf.int[1], 1),
+    IC_sup       = round(res$conf.int[2], 1)
+  )
+})
+tab_welch <- do.call(rbind, resultats_welch)
+names(tab_welch) <- c("Variable", "Moy. Adelie", "Moy. Gentoo", "p-value", "IC 95% inf", "IC 95% sup")
+kable(tab_welch, caption = "Résultats des tests de Welch : comparaison des moyennes par espèce.",
+      booktabs = TRUE, row.names = FALSE)
+```
+
+**Décision :** Pour les quatre variables continues, on rejette $H_0$ au niveau $\alpha = 5\,\%$. Les espèces diffèrent significativement sur toutes les mesures morphométriques. L'ampleur des écarts est considérable : les Gentoo ont un bec plus long ($+8{,}7$ mm), moins profond ($-3{,}4$ mm), des nageoires bien plus longues ($+27{,}2$ mm) et une masse corporelle nettement supérieure ($+1\,375$ g).
+
+## Tests non paramétriques de robustesse
+
+Pour confirmer les résultats du test de Welch sans supposer la normalité, nous appliquons le test de Mann-Whitney (Wilcoxon) et le test de Kolmogorov-Smirnov à 2 échantillons.
+
+```{r tests-nonparam}
+# Tests de Mann-Whitney (Wilcoxon)
+wilcox.test(bill_length_mm    ~ species)
+wilcox.test(bill_depth_mm     ~ species)
+wilcox.test(flipper_length_mm ~ species)
+wilcox.test(body_mass_g       ~ species)
+```
+
+```{r ks-tests}
+# Tests de Kolmogorov-Smirnov à 2 échantillons
+adelie <- penguins[penguins$species == "Adelie", ]
+gentoo <- penguins[penguins$species == "Gentoo", ]
+
+ks.test(adelie$bill_length_mm,    gentoo$bill_length_mm)
+ks.test(adelie$bill_depth_mm,     gentoo$bill_depth_mm)
+ks.test(adelie$flipper_length_mm, gentoo$flipper_length_mm)
+ks.test(adelie$body_mass_g,       gentoo$body_mass_g)
+```
+
+Les tests non paramétriques confirment systématiquement les conclusions du test de Welch : les deux espèces diffèrent significativement pour chaque variable morphométrique, indépendamment de toute hypothèse de normalité.
+
+## Corrélations entre variables continues et paradoxe de Simpson
+
+```{r correlations}
+# Corrélations de Pearson globales
+cor.test(bill_length_mm,    bill_depth_mm)
+cor.test(bill_length_mm,    flipper_length_mm)
+cor.test(bill_length_mm,    body_mass_g)
+cor.test(bill_depth_mm,     flipper_length_mm)
+cor.test(bill_depth_mm,     body_mass_g)
+cor.test(flipper_length_mm, body_mass_g)
+```
+
+```{r paradoxe-simpson}
+# Paradoxe de Simpson : corrélation bill_length x bill_depth par espèce
+by(penguins, species, function(d)
+  cor.test(d$bill_length_mm, d$bill_depth_mm))
+```
+
+```{r tableau-correlations, results='asis'}
+paires <- list(
+  c("bill_length_mm", "bill_depth_mm"),
+  c("bill_length_mm", "flipper_length_mm"),
+  c("bill_length_mm", "body_mass_g"),
+  c("bill_depth_mm",  "flipper_length_mm"),
+  c("bill_depth_mm",  "body_mass_g"),
+  c("flipper_length_mm", "body_mass_g")
+)
+tab_cor <- do.call(rbind, lapply(paires, function(p) {
+  res <- cor.test(penguins[[p[1]]], penguins[[p[2]]])
+  data.frame(
+    Paire    = paste(p[1], "×", p[2]),
+    r        = round(res$estimate, 3),
+    p_value  = formatC(res$p.value, format = "e", digits = 2)
+  )
+}))
+kable(tab_cor, caption = "Corrélations de Pearson entre variables continues (données globales).",
+      booktabs = TRUE, row.names = FALSE)
+```
+
+**Paradoxe de Simpson.** Le résultat le plus remarquable concerne la paire `bill_length_mm` $\times$ `bill_depth_mm` :
+
+- Corrélation globale : $r = -0{,}55$ --- corrélation **négative**.
+- Corrélation intra-Adelie : $r = +0{,}39$ --- corrélation **positive**.
+- Corrélation intra-Gentoo : $r = +0{,}64$ --- corrélation **positive**.
+
+Ce renversement de signe constitue un paradoxe de Simpson classique : la variable `species` agit comme variable confondante. Au sein de chaque espèce, un manchot au bec plus long a tendance à avoir un bec plus profond. Mais comme les Gentoo ont un bec long et peu profond par rapport aux Adelie, la tendance globale s'inverse.
+
+## Tableau de synthèse
+
+```{r tableau-synthese, results='asis'}
+tab_synthese <- data.frame(
+  Liaison    = c("species × island", "species × year",
+                 "species × bill\\_length", "species × bill\\_depth",
+                 "species × flipper\\_length", "species × body\\_mass"),
+  Test       = c("Chi2", "Chi2", "Welch", "Welch", "Welch", "Welch"),
+  p_value    = c("$8{,}9 \\times 10^{-32}$", "0,645",
+                 "$3{,}1 \\times 10^{-68}$", "$1{,}5 \\times 10^{-73}$",
+                 "$3{,}2 \\times 10^{-99}$", "$7{,}7 \\times 10^{-65}$"),
+  Ampleur    = c("Gentoo = Biscoe", "Réparti",
+                 "+8,7 mm", "-3,4 mm", "+27,2 mm", "+1 375 g"),
+  Decision   = c("Liées", "Indépendantes", rep("Liées", 4))
+)
+names(tab_synthese) <- c("Liaison", "Test", "p-value", "Ampleur", "Décision")
+kable(tab_synthese, caption = "Synthèse des tests statistiques ($\\alpha = 5\\,\\%$).",
+      booktabs = TRUE, row.names = FALSE, escape = FALSE)
+```
+
+---
+
+# Conclusion
+
+Cette étude du jeu de données Palmer Penguins (Adelie vs Gentoo) a permis de mettre en évidence plusieurs résultats importants à l'aide des tests statistiques du cours.
+
+**Réponse à l'objectif principal.** Les quatre variables morphométriques --- longueur du bec, profondeur du bec, longueur des nageoires et masse corporelle --- distinguent fortement les deux espèces. Tous les tests de Welch rejettent $H_0$ avec des p-values inférieures à $10^{-64}$, et ces résultats sont confirmés par les tests non paramétriques de Mann-Whitney et de Kolmogorov-Smirnov. La variable `flipper_length_mm` présente le plus grand écart relatif ($+27{,}2$ mm, IC à 95 % : $[25{,}7 ; 28{,}8]$) et constitue la variable la plus discriminante.
+
+**Géographie.** La variable `island` est fortement liée à l'espèce ($\chi^2 = 143$, $p < 10^{-31}$) : les Gentoo sont exclusivement présents sur l'île de Biscoe.
+
+**Contre-exemple.** La variable `year` est indépendante de l'espèce ($\chi^2 = 0{,}88$, $p = 0{,}645$), ce qui montre que l'échantillonnage n'est pas biaisé temporellement.
+
+**Paradoxe de Simpson.** L'analyse des corrélations entre les dimensions du bec a révélé un paradoxe de Simpson : la corrélation globale entre longueur et profondeur est négative ($r = -0{,}55$) alors qu'elle est positive au sein de chaque espèce ($r = +0{,}39$ pour Adelie, $r = +0{,}64$ pour Gentoo). La variable `species` agit comme variable confondante.
+
+**Limites.** La quasi-séparation complète entre les deux espèces rend les p-values peu informatives en elles-mêmes, d'où l'importance de décrire systématiquement l'ampleur des écarts via les intervalles de confiance et les moyennes par groupe. Par ailleurs, la variable `sex` n'est pas disponible dans ce jeu de données, et seules deux espèces sur trois ont été retenues.
+
+**Perspective.** Ces résultats fondent naturellement un classifieur binaire. L'étape suivante serait d'utiliser une régression logistique ou une analyse discriminante linéaire pour prédire l'espèce à partir des variables morphométriques --- transition naturelle vers l'apprentissage statistique, hors périmètre de ce projet.
+
+---
+
+# Bibliographie
+
+[1] Horst, A. M., Hill, A. P., et Gorman, K. B. (2020). *palmerpenguins: Palmer Archipelago (Antarctica) penguin data*. R package version 0.1.0.
+
+[2] Gorman, K. B., Williams, T. D., et Fraser, W. R. (2014). Ecological sexual dimorphism and environmental variability within a community of Antarctic penguins (genus Pygoscelis). *PLoS ONE*, 9(3), e90081.
+
+[3] Horst, A. M., Hill, A. P., et Gorman, K. B. (2022). Palmer Archipelago Penguins Data in the palmerpenguins R Package --- An Alternative to Anderson's Irises. *The R Journal*, 14(1), 244--254.
